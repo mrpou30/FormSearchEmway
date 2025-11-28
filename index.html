@@ -9,6 +9,7 @@
 <body>
   <main class="app">
     <header class="topcard">
+      <img src="logo.png" alt="TOYSKINBDOM" style="height:30px; background:orange; border:none; border-radius:5px;">
       <h1>Cari Item Emway</h1>
       <p class="muted">Masukan <strong>Code Item Emway</strong>
     </header>
@@ -24,27 +25,29 @@
           <span>Input Disini 👇🏿</span>
           <input id="inputCode" type="text" placeholder="Masukkan code lalu tekan Enter" />
         </label>
+        
+        <div id="lookupLoading" class="lookup-loading hidden">Mencari...</div>
 
         <div class="results neumorphic">
           <div class="row">
             <label>Code</label>
-            <input readonly id="resCode" />
+            <textarea readonly id="resCode"></textarea>
           </div>
           <div class="row">
             <label>Article</label>
-            <input readonly id="resArticle" />
+            <textarea readonly id="resArticle"></textarea>
           </div>
           <div class="row">
             <label>Description</label>
-            <input readonly id="resDesc" />
+            <textarea readonly id="resDesc" rows="2"></textarea>
           </div>
           <div class="row">
             <label>Price</label>
-            <input readonly id="resPrice" />
+            <textarea readonly id="resPrice"></textarea>
           </div>
           <div class="row">
             <label>Department</label>
-            <input readonly id="resDept" />
+            <textarea readonly id="resDept"></textarea>
           </div>
         </div>
 
@@ -56,16 +59,14 @@
 
     <!-- alerts container -->
     <div id="alerts" class="alerts"></div>
-
-    <footer class="foot muted">Hosted as static page — otomatis mengimpor <code>master EMWAY</code> saat load.</footer>
   </main>
   
     <!-- Footer Running Text -->
     <footer class="footer-run">
       <div id="runWrapper">
     <div id="runText">
-      Input Kode yang ada di Item EMWAY lalu tekan <b>ENTER</b> || ©2025 Search EMWAY Code || <i>by mrpou30</i>
-    </div>
+      <b>NOTE : </b>Input Kode yang ada di Item EMWAY lalu tekan <b>ENTER</b>. Jika hasil muncul, maka <b>ARTICLE</b> akan langsung <b><i>DI SALIN</i></b>. || <i style="padding-bottom:30px;color:red;">Harap Perhatikan Deskripsi Saat Hasil Muncul.</i> || <i style="padding-bottom:30px;color:red;"> Pastikan Article Sesuai dengan ITEM !!! </i> || Sistem otomatis mengimpor. Master EMWAY saat load. || ©2025 Search EMWAY Code || <i>by mrpou30</i> 
+    </i>
   </div>
 </footer>
 
