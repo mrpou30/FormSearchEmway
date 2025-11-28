@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Lookup — Emway</title>
+  <title>Cari Item Emway</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app">
     <header class="topcard">
-      <h1>Lookup Barang</h1>
-      <p class="muted">Cari cepat berdasarkan <strong>Code</strong> (fallback: Article)</p>
+      <h1>Cari Item Emway</h1>
+      <p class="muted">Masukan <strong>Code Item Emway</strong>
     </header>
 
     <section id="loaderPanel" class="panel centered hidden">
@@ -21,13 +21,13 @@
     <section id="appPanel" class="panel hidden">
       <form id="lookupForm" autocomplete="off" onsubmit="return false;">
         <label class="field">
-          <span>Code || Kode</span>
+          <span>Input Disini 👇🏿</span>
           <input id="inputCode" type="text" placeholder="Masukkan code lalu tekan Enter" />
         </label>
 
         <div class="results neumorphic">
           <div class="row">
-            <label>Code || Kode</label>
+            <label>Code</label>
             <input readonly id="resCode" />
           </div>
           <div class="row">
@@ -49,7 +49,7 @@
         </div>
 
         <div class="controls">
-          <button id="btnFinish" class="btn neumorphic">Selesai</button>
+          <button id="btnFinish" class="btn neumorphic">Cari Lagi</button>
         </div>
       </form>
     </section>
@@ -57,7 +57,7 @@
     <!-- alerts container -->
     <div id="alerts" class="alerts"></div>
 
-    <footer class="foot muted">Hosted as static page — otomatis mengimpor <code>master.csv</code> saat load.</footer>
+    <footer class="foot muted">Hosted as static page — otomatis mengimpor <code>master EMWAY</code> saat load.</footer>
   </main>
 
   <script src="app.js"></script>
