@@ -324,3 +324,20 @@
   // Start
   document.addEventListener('DOMContentLoaded', init);
 })();
+
+// Tombol Delete di keyboard desktop = klik tombol Selesai
+document.addEventListener('keydown', (e) => {
+  // cek jika user di desktop & tidak sedang fokus di input lain
+  if (e.key === 'Delete') {
+    // Jalan seperti tombol Selesai
+    if (!inputCode.value.trim()) {
+      showAlert('error', 'Kode harus di isi');
+      inputCode.focus();
+      return;
+    }
+    inputCode.value = '';
+    populateResult(null);
+    inputCode.focus();
+    showAlert('success', 'Reset berhasil (Delete). Siap input berikutnya.');
+  }
+});
