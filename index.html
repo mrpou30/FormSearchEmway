@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lookup — Emway</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="topcard">
+      <h1>Lookup Barang</h1>
+      <p class="muted">Cari cepat berdasarkan <strong>Code</strong> (fallback: Article)</p>
+    </header>
+
+    <section id="loaderPanel" class="panel centered hidden">
+      <div class="spinner" id="spinner"></div>
+      <div class="loader-text" id="loaderText">Mencari master.csv dan mengimpor...</div>
+    </section>
+
+    <section id="appPanel" class="panel hidden">
+      <form id="lookupForm" autocomplete="off" onsubmit="return false;">
+        <label class="field">
+          <span>Code || Kode</span>
+          <input id="inputCode" type="text" placeholder="Masukkan code lalu tekan Enter" />
+        </label>
+
+        <div class="results neumorphic">
+          <div class="row">
+            <label>Code || Kode</label>
+            <input readonly id="resCode" />
+          </div>
+          <div class="row">
+            <label>Article</label>
+            <input readonly id="resArticle" />
+          </div>
+          <div class="row">
+            <label>Description</label>
+            <input readonly id="resDesc" />
+          </div>
+          <div class="row">
+            <label>Price</label>
+            <input readonly id="resPrice" />
+          </div>
+          <div class="row">
+            <label>Department</label>
+            <input readonly id="resDept" />
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="btnFinish" class="btn neumorphic">Selesai</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- alerts container -->
+    <div id="alerts" class="alerts"></div>
+
+    <footer class="foot muted">Hosted as static page — otomatis mengimpor <code>master.csv</code> saat load.</footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
