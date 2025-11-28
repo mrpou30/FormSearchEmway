@@ -41,8 +41,8 @@
     a.querySelector('.close').addEventListener('click', () => {
       a.remove();
     });
-    // auto remove after 5s
-    setTimeout(()=>a.remove(), 5000);
+    // auto remove after 2s
+    setTimeout(()=>a.remove(), 2000);
   }
 
   // Simple CSV parser (handles quoted fields with commas)
@@ -268,12 +268,24 @@
     }
   }
 
+let lookupBusy = false;
+const lookupLoading = el('#lookupLoading');
+
   // event handlers
   inputCode.addEventListener('keydown', async (ev) => {
     if (ev.key === 'Enter') {
+      if (lookupBusy) {
+        ev.preventDefault();
+        return;
+      }
+      
       ev.preventDefault();
       const val = inputCode.value.trim();
       if (!val) { showAlert('error', 'Kode harus di isi'); inputCode.focus(); return; }
+      
+      lookupBusy = true;
+      show(lookupLoading);
+      inputCode.disabled = true;
       // try lookup by code (case-insensitive)
       // our keyPath uses code as-is; to support case-insensitive, try several variants:
       const tried = [val, val.toUpperCase(), val.toLowerCase()];
@@ -286,21 +298,45 @@
       }
       if (found) {
         populateResult(found);
-        showAlert('success', `Ditemukan by Code: ${found.code}`);
+        showAlert('success', `Ditemukan!!\n Article disalin`);
+        // 🔓 Kembalikan normal
+        lookupBusy = false;
+        hide(lookupLoading);
+        inputCode.disabled = false;
+        inputCode.focus();
+        
+        navigator.clipboard.writeText(found.article || "");
+        
       } else {
         // fallback by article contains
         try {
           const byArticle = await lookupByArticle(val);
           if (byArticle && byArticle.length > 0) {
             populateResult(byArticle[0]);
-            showAlert('info', `Tidak ketemu Code. Menampilkan hasil by Article (${byArticle.length} cocok).`);
+            showAlert('success', `Ditemukan!!\n Article disalin`);
+            
+            lookupBusy = false;
+            hide(lookupLoading);
+            inputCode.disabled = false;
+            inputCode.focus();
+            
+            navigator.clipboard.writeText(byArticle[0].article || "");
+            
           } else {
             populateResult(null);
             showAlert('error', 'Tidak ditemukan data untuk input tersebut.');
+            lookupBusy = false;
+            hide(lookupLoading);
+            inputCode.disabled = false;
+            inputCode.focus();
           }
         } catch (e) {
           populateResult(null);
           showAlert('error', 'Gagal mencari by Article: ' + e.message);
+          lookupBusy = false;
+          hide(lookupLoading);
+          inputCode.disabled = false;
+          inputCode.focus();
         }
       }
     }
