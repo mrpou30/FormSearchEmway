@@ -138,7 +138,7 @@ textarea[readonly] {
   left: 0;
   width: 100%;
   background: var(--card);
-  padding: 10px 0;
+  padding: 6px 0;
   box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
   overflow: hidden;
 }
