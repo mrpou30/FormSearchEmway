@@ -42,7 +42,7 @@ body{
 img{margin-top:12px;}
 
 /* Panel */
-.panel{margin-top:18px; padding-bottom:12px;}
+.panel{margin-top:18px; padding-bottom:20px;}
 
 /* Loader */
 .centered{display:flex;gap:12px;align-items:center}
