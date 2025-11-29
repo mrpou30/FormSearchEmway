@@ -94,7 +94,7 @@ textarea[readonly] {
 
 /* results card */
 .results{padding:14px;border-radius:12px;margin-bottom:14px}
-.results .row{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.results .row{display:flex;gap:12px;align-items:center;margin-bottom:1px}
 .results label{width:120px;font-size:13px;color:var(--muted)}
 .results input{flex:1}
 
