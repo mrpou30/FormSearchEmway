@@ -1,24 +1,32 @@
-/* app.js
- - IndexedDB store: dataMasterEmway
- - On load: try fetch('./master.csv'), cache it, parse & import to IndexedDB
- - Lookup by CODE (key) else by ARTICLE (index search)
- - Alerts, loader, neumorphic UI
+/* app.js — searchEmway
+   Full clean (tanpa ubah perilaku), all logic in one IIFE.
 */
 
 (() => {
+
+  // ============================
+  //  CONSTANTS & GLOBAL REFS
+  // ============================
   const DB_NAME = 'lookup-db';
   const DB_VERSION = 1;
   const STORE_NAME = 'dataMasterEmway';
   const CACHE_NAME = 'emway-cache';
-  const MASTER_PATH = './master.csv'; // ensure master.csv exists at repo root
+  const MASTER_PATH = './master.csv';
 
-  // UI elements
+  const el = sel => document.querySelector(sel);
+  const show = node => node.classList.remove('hidden');
+  const hide = node => node.classList.add('hidden');
+
+  // UI Elements
   const loaderPanel = el('#loaderPanel');
   const loaderText = el('#loaderText');
   const appPanel = el('#appPanel');
+  const alerts = el('#alerts');
+
   const inputCode = el('#inputCode');
   const btnFinish = el('#btnFinish');
-  const alerts = el('#alerts');
+  const btnShareWA = el('#btnShareWA');
+  const lookupLoading = el('#lookupLoading');
 
   const resCode = el('#resCode');
   const resArticle = el('#resArticle');
@@ -26,193 +34,23 @@
   const resPrice = el('#resPrice');
   const resDept = el('#resDept');
 
-  let db;
+  let db = null;
+  let lookupBusy = false;
 
-  // --- helpers ---
-  function el(sel){ return document.querySelector(sel) }
-  function show(node){ node.classList.remove('hidden') }
-  function hide(node){ node.classList.add('hidden') }
 
-  function showAlert(type='info', text='') {
-    const a = document.createElement('div');
-    a.className = `alert ${type}`;
-    a.innerHTML = `<div>${text}</div><div class="close">&times;</div>`;
-    alerts.appendChild(a);
-    a.querySelector('.close').addEventListener('click', () => {
-      a.remove();
-    });
-    // auto remove after 2s
-    setTimeout(()=>a.remove(), 2000);
+  // ============================
+  //  UI HELPERS
+  // ============================
+  function showAlert(type = 'info', text = '') {
+    const box = document.createElement('div');
+    box.className = `alert ${type}`;
+    box.innerHTML = `<div>${text}</div><div class="close">&times;</div>`;
+    alerts.appendChild(box);
+    box.querySelector('.close').addEventListener('click', () => box.remove());
+    setTimeout(() => box.remove(), 2000);
   }
 
-  // Simple CSV parser (handles quoted fields with commas)
-  function parseCSV(text){
-    const rows = [];
-    let cur = '', inQuotes=false, row=[];
-    for (let i=0;i<text.length;i++){
-      const ch = text[i];
-      const nxt = text[i+1];
-      if (ch === '"' ) {
-        if (inQuotes && nxt === '"'){ cur += '"'; i++; continue; }
-        inQuotes = !inQuotes;
-        continue;
-      }
-      if (ch === ',' && !inQuotes) {
-        row.push(cur); cur=''; continue;
-      }
-      if ((ch === '\n' || ch === '\r') && !inQuotes) {
-        if (cur !== '' || row.length>0) { row.push(cur); rows.push(row); row=[]; cur=''; }
-        // handle \r\n
-        if (ch === '\r' && nxt === '\n') i++;
-        continue;
-      }
-      cur += ch;
-    }
-    if (cur !== '' || row.length>0){ row.push(cur); rows.push(row); }
-    return rows;
-  }
-
-  // IndexedDB open/create
-  function openDB(){
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = ev => {
-        const idb = ev.target.result;
-        if (!idb.objectStoreNames.contains(STORE_NAME)) {
-          const store = idb.createObjectStore(STORE_NAME, { keyPath: 'code' });
-          store.createIndex('article_idx', 'article_lower', { unique:false });
-        }
-      };
-      req.onsuccess = ev => { db = ev.target.result; resolve(db); };
-      req.onerror = ev => reject(ev.target.error);
-    });
-  }
-
-  // Put many items into store (transaction)
-  function importToIndexedDB(records){
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      let count = 0;
-      for (const r of records){
-        // r expected: {code, article, description, price, department}
-        const toPut = {
-          code: r.code,
-          article: r.article,
-          description: r.description,
-          price: r.price,
-          department: r.department,
-          article_lower: (r.article || '').toLowerCase()
-        };
-        store.put(toPut);
-        count++;
-      }
-      tx.oncomplete = () => resolve(count);
-      tx.onerror = ev => reject(ev.target.error);
-    });
-  }
-
-  // Lookup by code
-  function lookupByCode(code){
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.get(code);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  // Lookup by article (contains)
-  function lookupByArticle(term){
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const idx = store.index('article_idx');
-      const results = [];
-      const lower = term.toLowerCase();
-      // iterate all and filter includes (for simplicity, but index helps)
-      idx.openCursor().onsuccess = function(e){
-        const cursor = e.target.result;
-        if (!cursor) { resolve(results); return; }
-        if (cursor.key && cursor.key.includes(lower)) {
-          results.push(cursor.value);
-        }
-        cursor.continue();
-      };
-      idx.openCursor().onerror = e => reject(e.target.error);
-    });
-  }
-
-  // fetch master.csv, with cache fallback
-  async function fetchMasterCsv() {
-    loaderText.textContent = 'Mencari master.csv di cache...';
-    // try cache first
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const cachedResp = await cache.match(MASTER_PATH);
-      if (cachedResp) {
-        loaderText.textContent = 'Memuat master.csv dari cache...';
-        const txt = await cachedResp.text();
-        return {source:'cache', text:txt};
-      }
-    } catch (e) {
-      // ignore cache errors
-      console.warn('cache check failed', e);
-    }
-
-    loaderText.textContent = 'Mencoba mendownload master.csv dari server...';
-    // fetch from network
-    try {
-      const resp = await fetch(MASTER_PATH, {cache: 'no-store'});
-      if (!resp.ok) throw new Error('fetch failed: ' + resp.status);
-      const txt = await resp.text();
-      // put into cache
-      try {
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(MASTER_PATH, new Response(txt));
-      } catch(e){
-        console.warn('cache put failed', e);
-      }
-      return {source:'network', text:txt};
-    } catch (e) {
-      throw new Error('Tidak dapat mengakses master.csv: ' + e.message);
-    }
-  }
-
-  // Process CSV text into record objects
-  function csvToRecords(text){
-    const rows = parseCSV(text);
-    if (!rows || rows.length === 0) return [];
-    // assume first row is header - find columns for code/article/description/price/department
-    const header = rows[0].map(h => (h || '').trim().toLowerCase());
-    const mapIndex = {};
-    header.forEach((h,i) => {
-      if (h.includes('code') || h.includes('kode')) mapIndex.code = i;
-      if (h.includes('article')) mapIndex.article = i;
-      if (h.includes('desc') || h.includes('description')) mapIndex.description = i;
-      if (h.includes('price') || h.includes('harga')) mapIndex.price = i;
-      if (h.includes('dept') || h.includes('department') || h.includes('bagian')) mapIndex.department = i;
-    });
-    const recs = [];
-    for (let i=1;i<rows.length;i++){
-      const r = rows[i];
-      if (!r || r.length === 0) continue;
-      const code = (r[mapIndex.code] || '').trim();
-      if (!code) continue; // skip rows w/o code
-      recs.push({
-        code,
-        article: (r[mapIndex.article] || '').trim(),
-        description: (r[mapIndex.description] || '').trim(),
-        price: (r[mapIndex.price] || '').trim(),
-        department: (r[mapIndex.department] || '').trim()
-      });
-    }
-    return recs;
-  }
-
-  // UI populate result fields
-  function populateResult(item){
+  function populateResult(item) {
     if (!item) {
       resCode.value = '';
       resArticle.value = '';
@@ -228,144 +66,254 @@
     resDept.value = item.department || '';
   }
 
-  // Initialize app flow
-  async function init(){
-    show(loaderPanel);
-    hide(appPanel);
 
+  // ============================
+  //  CSV PARSER
+  // ============================
+  function parseCSV(text) {
+    const rows = [];
+    let cur = '', inQuotes = false, row = [];
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const nxt = text[i + 1];
+
+      if (ch === '"') {
+        if (inQuotes && nxt === '"') { cur += '"'; i++; continue; }
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (ch === ',' && !inQuotes) {
+        row.push(cur); cur = '';
+        continue;
+      }
+      if ((ch === '\n' || ch === '\r') && !inQuotes) {
+        if (cur !== '' || row.length > 0) { row.push(cur); rows.push(row); }
+        row = []; cur = '';
+        if (ch === '\r' && nxt === '\n') i++;
+        continue;
+      }
+      cur += ch;
+    }
+    if (cur !== '' || row.length > 0) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+
+  function csvToRecords(text) {
+    const rows = parseCSV(text);
+    if (!rows || !rows.length) return [];
+
+    const header = rows[0].map(h => (h || '').trim().toLowerCase());
+    const map = {};
+
+    header.forEach((h, i) => {
+      if (h.includes('code') || h.includes('kode')) map.code = i;
+      if (h.includes('article') || h.includes('artikel')) map.article = i;
+      if (h.includes('desc') || h.includes('description') || h.includes('deskripsi')) map.description = i;
+      if (h.includes('price') || h.includes('harga')) map.price = i;
+      if (h.includes('department') || h.includes('bagian')) map.department = i;
+    });
+
+    const list = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || !r.length) continue;
+      const code = (r[map.code] || '').trim();
+      if (!code) continue;
+
+      list.push({
+        code,
+        article: (r[map.article] || '').trim(),
+        description: (r[map.description] || '').trim(),
+        price: (r[map.price] || '').trim(),
+        department: (r[map.department] || '').trim()
+      });
+    }
+    return list;
+  }
+
+
+  // ============================
+  //  INDEXEDDB
+  // ============================
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        const idb = e.target.result;
+        if (!idb.objectStoreNames.contains(STORE_NAME)) {
+          const store = idb.createObjectStore(STORE_NAME, { keyPath: 'code' });
+          store.createIndex('article_idx', 'article_lower', { unique: false });
+        }
+      };
+      req.onsuccess = e => { db = e.target.result; resolve(db); };
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function importToIndexedDB(records) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const st = tx.objectStore(STORE_NAME);
+      let count = 0;
+      for (const r of records) {
+        st.put({
+          code: r.code,
+          article: r.article,
+          description: r.description,
+          price: r.price,
+          department: r.department,
+          article_lower: (r.article || '').toLowerCase()
+        });
+        count++;
+      }
+      tx.oncomplete = () => resolve(count);
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function lookupByCode(code) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const st = tx.objectStore(STORE_NAME);
+      const req = st.get(code);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function lookupByArticle(term) {
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const st = tx.objectStore(STORE_NAME);
+      const idx = st.index('article_idx');
+
+      const results = [];
+      const lower = term.toLowerCase();
+
+      idx.openCursor().onsuccess = e => {
+        const cur = e.target.result;
+        if (!cur) return resolve(results);
+        if (cur.key && cur.key.includes(lower)) results.push(cur.value);
+        cur.continue();
+      };
+    });
+  }
+
+
+  // ============================
+  //  FETCH MASTER CSV
+  // ============================
+  async function fetchMasterCsv() {
+    loaderText.textContent = 'Mencari master.csv di cache...';
+
+    // try cache
     try {
-      await openDB();
-    } catch (e) {
-      showAlert('error', 'Gagal membuka database: ' + e.message);
-      console.error(e);
-      loaderText.textContent = 'Gagal membuka database.';
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(MASTER_PATH);
+      if (cached) {
+        loaderText.textContent = 'Memuat master.csv dari cache...';
+        return { source: 'cache', text: await cached.text() };
+      }
+    } catch { }
+
+    // try network
+    loaderText.textContent = 'Mencoba mendownload master.csv dari server...';
+    const resp = await fetch(MASTER_PATH, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    const txt = await resp.text();
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(MASTER_PATH, new Response(txt));
+    } catch { }
+
+    return { source: 'network', text: txt };
+  }
+
+
+  // ============================
+  //  LOOKUP ACTION
+  // ============================
+  async function doLookup(value) {
+
+    lookupBusy = true;
+    show(lookupLoading);
+    inputCode.disabled = true;
+
+    const attempts = [value, value.toUpperCase(), value.toLowerCase()];
+    let found = null;
+
+    for (const t of attempts) {
+      try {
+        found = await lookupByCode(t);
+      } catch { }
+      if (found) break;
+    }
+
+    if (found) {
+      populateResult(found);
+      showAlert('success', 'Ditemukan!!\n Article disalin');
+      navigator.clipboard.writeText(found.article || "");
+      return finishLookup();
+    }
+
+    // fallback by article
+    const list = await lookupByArticle(value);
+    if (list && list.length > 0) {
+      populateResult(list[0]);
+      showAlert('success', 'Ditemukan!!\n Article disalin');
+      navigator.clipboard.writeText(list[0].article || "");
+      return finishLookup();
+    }
+
+    populateResult(null);
+    showAlert('error', 'Tidak ditemukan data untuk input tersebut.');
+    finishLookup();
+  }
+
+  function finishLookup() {
+    lookupBusy = false;
+    hide(lookupLoading);
+    inputCode.disabled = false;
+    inputCode.focus();
+  }
+
+
+  // ============================
+  //  EVENT HANDLERS
+  // ============================
+  inputCode.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+
+    if (lookupBusy) return e.preventDefault();
+
+    e.preventDefault();
+    const val = inputCode.value.trim();
+    if (!val) {
+      showAlert('error', 'Kode harus di isi');
+      inputCode.focus();
       return;
     }
 
-    // Try to fetch master.csv and import
-    try {
-      const res = await fetchMasterCsv();
-      loaderText.textContent = `Memproses master.csv (${res.source})...`;
-
-      const records = csvToRecords(res.text);
-      if (records.length === 0) {
-        showAlert('info', 'master.csv ditemukan tapi kosong atau format header tidak dikenali.');
-        loaderText.textContent = 'Tidak ada data untuk diimpor.';
-      } else {
-        // import
-        loaderText.textContent = `Mengimpor ${records.length} baris ke IndexedDB...`;
-        const count = await importToIndexedDB(records);
-        showAlert('success', `Impor selesai: ${count} item disimpan.`);
-        loaderText.textContent = 'Impor selesai.';
-      }
-    } catch (e) {
-      // fallback: if can't fetch, but DB might already have data
-      showAlert('error', 'Gagal impor master.csv: ' + e.message);
-      loaderText.textContent = 'Menunggu data lokal...';
-    } finally {
-      // hide loader and show app
-      setTimeout(()=>{ hide(loaderPanel); show(appPanel); inputCode.focus(); }, 600);
-    }
-  }
-
-let lookupBusy = false;
-const lookupLoading = el('#lookupLoading');
-
-  // event handlers
-  inputCode.addEventListener('keydown', async (ev) => {
-    if (ev.key === 'Enter') {
-      if (lookupBusy) {
-        ev.preventDefault();
-        return;
-      }
-      
-      ev.preventDefault();
-      const val = inputCode.value.trim();
-      if (!val) { showAlert('error', 'Kode harus di isi'); inputCode.focus(); return; }
-      
-      lookupBusy = true;
-      show(lookupLoading);
-      inputCode.disabled = true;
-      // try lookup by code (case-insensitive)
-      // our keyPath uses code as-is; to support case-insensitive, try several variants:
-      const tried = [val, val.toUpperCase(), val.toLowerCase()];
-      let found = null;
-      for (const t of tried){
-        try {
-          found = await lookupByCode(t);
-        } catch(e) { console.warn(e) }
-        if (found) break;
-      }
-      if (found) {
-        populateResult(found);
-        showAlert('success', `Ditemukan!!\n Article disalin`);
-        // 🔓 Kembalikan normal
-        lookupBusy = false;
-        hide(lookupLoading);
-        inputCode.disabled = false;
-        inputCode.focus();
-        
-        navigator.clipboard.writeText(found.article || "");
-        
-      } else {
-        // fallback by article contains
-        try {
-          const byArticle = await lookupByArticle(val);
-          if (byArticle && byArticle.length > 0) {
-            populateResult(byArticle[0]);
-            showAlert('success', `Ditemukan!!\n Article disalin`);
-            
-            lookupBusy = false;
-            hide(lookupLoading);
-            inputCode.disabled = false;
-            inputCode.focus();
-            
-            navigator.clipboard.writeText(byArticle[0].article || "");
-            
-          } else {
-            populateResult(null);
-            showAlert('error', 'Tidak ditemukan data untuk input tersebut.');
-            lookupBusy = false;
-            hide(lookupLoading);
-            inputCode.disabled = false;
-            inputCode.focus();
-          }
-        } catch (e) {
-          populateResult(null);
-          showAlert('error', 'Gagal mencari by Article: ' + e.message);
-          lookupBusy = false;
-          hide(lookupLoading);
-          inputCode.disabled = false;
-          inputCode.focus();
-        }
-      }
-    }
+    doLookup(val);
   });
 
-  btnFinish.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    // validate input not empty? user asked: if code empty show harus di isi
+  btnFinish.addEventListener('click', e => {
+    e.preventDefault();
     if (!inputCode.value.trim()) {
       showAlert('error', 'Kode harus di isi');
       inputCode.focus();
       return;
     }
-    // reset fields
     inputCode.value = '';
     populateResult(null);
     inputCode.focus();
     showAlert('success', 'Reset berhasil. Siap input berikutnya.');
   });
 
-  // Start
-  document.addEventListener('DOMContentLoaded', init);
-})();
-
-// Tombol Delete di keyboard desktop = klik tombol Selesai
-document.addEventListener('keydown', (e) => {
-  // cek jika user di desktop & tidak sedang fokus di input lain
-  if (e.key === 'Delete') {
-    // Jalan seperti tombol Selesai
+  // Delete key = reset
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Delete') return;
     if (!inputCode.value.trim()) {
       showAlert('error', 'Kode harus di isi');
       inputCode.focus();
@@ -375,5 +323,96 @@ document.addEventListener('keydown', (e) => {
     populateResult(null);
     inputCode.focus();
     showAlert('success', 'Reset berhasil (Delete). Siap input berikutnya.');
+  });
+
+  // Share WA
+  btnShareWA.addEventListener('click', () => {
+    const article = resArticle.value.trim();
+    const desc = resDesc.value.trim();
+    const code = resCode.value.trim();
+
+    if (!article || !code) {
+      showAlert('error', 'Belum ada data untuk dibagikan.');
+      return;
+    }
+
+    const msg = encodeURIComponent(`${article} - ${desc} - ${code}`);
+    const wa = `https://wa.me/?text=${msg}`;
+    window.open(wa, '_blank');
+    showAlert('info', 'Membuka WhatsApp...');
+  });
+  
+  //Reset
+  const btnRefresh = el('#btnRefresh');
+
+btnRefresh.addEventListener('click', async () => {
+  const ok = confirm("Yakin ingin me-refresh master?\n\nIni akan menghapus semua data lama dan mengunduh master.csv terbaru.");
+  if (!ok) return;
+
+  showAlert('info', 'Menghapus data lama...');
+
+  // Hapus IndexedDB
+  await new Promise(resolve => {
+    const req = indexedDB.deleteDatabase('lookup-db');
+    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+  });
+
+  // Hapus cache
+  try {
+    await caches.delete('emway-cache');
+  } catch (e) {
+    console.warn('Gagal hapus cache:', e);
   }
+
+  showAlert('success', 'Master dibersihkan. Memuat ulang...');
+
+  setTimeout(() => {
+    location.reload();
+  }, 600);
 });
+
+
+  // ============================
+  //  INIT FLOW
+  // ============================
+  async function init() {
+    show(loaderPanel);
+    hide(appPanel);
+
+    try {
+      await openDB();
+    } catch (e) {
+      showAlert('error', 'Gagal membuka database: ' + e.message);
+      loaderText.textContent = 'Gagal membuka database.';
+      return;
+    }
+
+    try {
+      const res = await fetchMasterCsv();
+      loaderText.textContent = `Memproses master.csv (${res.source})...`;
+
+      const recs = csvToRecords(res.text);
+
+      if (!recs.length) {
+        showAlert('info', 'master.csv kosong atau header tidak dikenali.');
+        loaderText.textContent = 'Tidak ada data untuk diimpor.';
+      } else {
+        loaderText.textContent = `Mengimpor ${recs.length} baris...`;
+        const c = await importToIndexedDB(recs);
+        showAlert('success', `Impor selesai: ${c} item disimpan.`);
+      }
+    } catch (e) {
+      showAlert('error', 'Gagal impor master.csv: ' + e.message);
+      loaderText.textContent = 'Menunggu data lokal...';
+    } finally {
+      setTimeout(() => {
+        hide(loaderPanel);
+        show(appPanel);
+        inputCode.focus();
+      }, 600);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+
+})();
