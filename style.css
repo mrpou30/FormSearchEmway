@@ -40,7 +40,7 @@ body{
 .muted{color:var(--muted);font-size:13px}
 
 /* Panel */
-.panel{margin-top:10px; padding-top:10px; margin-bottom:200px;}
+.panel{margin-top:10px; padding-bottom:200px;}
 
 /* Loader */
 .centered{display:flex;gap:12px;align-items:center}
