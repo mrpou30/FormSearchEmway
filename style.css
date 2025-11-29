@@ -181,3 +181,8 @@ textarea[readonly] {
   50% { opacity: 1; }
   100% { opacity: 0.4; }
 }
+
+
+.btn#btnShareWA {
+  background: linear-gradient(180deg,#e9ffe9,#d9fdd9);
+}
